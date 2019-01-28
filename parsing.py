@@ -1,41 +1,13 @@
 import csv
-import json
-from dataclasses import fields
 from os.path import splitext
 
-import dicttoxml
-
+from dump import codecs
 from hotel import Hotel
-
-
-def dump_xml(data, f):
-    b = dicttoxml.dicttoxml(data,
-                            custom_root='hotels',
-                            attr_type=False,
-                            item_func=lambda _: 'hotel')
-    f.write(b.decode('utf-8'))
-
-
-def dump_csv(data, f):
-    writer = csv.DictWriter(f, fieldnames=[field.name for field in fields(Hotel)])
-    writer.writeheader()
-    for d in data:
-        writer.writerow(d)
-
-
-# All allowed output codecs are stored here
-# To support a new output codec, simply add a new entry which satisfies the following convention:
-# 'extension' => lambda data, file_handle: ...
-codecs = {
-    '.json': json.dump,
-    '.csv': dump_csv,
-    '.xml': dump_xml,
-}
 
 
 def parse_hotels(cvs_path):
     """
-    Parses a CSV file and creates a list of hotels out of it.
+    Parses an UTF-8-encoded CSV file and creates a list of hotels out of it.
     Any parsing errors will be printed to stdout.
 
     :param cvs_path:
@@ -60,9 +32,13 @@ def parse_hotels(cvs_path):
                     header = row
                     continue
 
-                # Zip column names with the current row and pass as dict to Hotel dataclass constructor,
-                # so that even if the csv columns order change, the Hotel will be created correctly
-                hotel = Hotel(**dict(zip(header, row)))
+                try:
+                    # Zip column names with the current row and pass as dict to Hotel dataclass constructor,
+                    # so that even if the csv columns order change, the Hotel will be created correctly
+                    hotel = Hotel(**dict(zip(header, row)))
+                except TypeError:
+                    print('[Line {}] Unexpected columns found ({})'.format(line, header))
+                    continue
 
                 reason = hotel.validate()
 
@@ -78,6 +54,17 @@ def parse_hotels(cvs_path):
 
 
 def write_hotels(hotels, path):
+    """
+    Converts a sequence of hotels to an output file.
+    The format is determined by the extension specified in the path.
+
+    :param hotels:
+    The hotel sequence to convert.
+    :param path:
+    The path to store the converted hotels.
+    The extension of this path determines the output format (.json, .html, etc.)
+    """
+
     _, ext = splitext(path)
 
     if ext not in codecs:
